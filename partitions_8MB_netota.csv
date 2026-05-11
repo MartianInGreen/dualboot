@@ -1,0 +1,28 @@
+# mesh-dualboot 8 MB partition table for ESP32-S3 — NET-OTA variant.
+# T-Beam Supreme (8 MB flash) layout for selectors built with MDB_NET_OTA.
+# The 8 MB chip has only 64 KB tail slack today; growing factory means
+# trimming elsewhere. The trade-offs:
+#   factory     384 KB  -> 768 KB   (+384, fits ~720 KB netota selector)
+#   ota_0      3.1875M  -> 3.125M   (-64 KB; current builds ~2.6 MB, fine)
+#   ota_1      3.1875M  -> 3.125M   (-64 KB)
+#   spiffs      512 KB  -> 384 KB   (-128, plenty for Meshtastic config)
+#   mc_spiffs   512 KB  -> 384 KB   (-128, plenty for MeshCore SPIFFS)
+#   coredump     64 KB     unchanged
+#
+# Apps are 64 KB-aligned; data partitions 4 KB-aligned.
+#
+# Slot assignment (firmware-to-slot mapping is in slots.json):
+#   factory  -> selector app (boot menu + net-OTA listener)
+#   ota_0    -> first firmware (per slots.json)
+#   ota_1    -> second firmware (per slots.json)
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x4000,
+nvs_sel,    data, nvs,      0xd000,    0x3000,
+otadata,    data, ota,      0x10000,   0x2000,
+factory,    app,  factory,  0x20000,   0xC0000,
+ota_0,      app,  ota_0,    0xE0000,   0x320000,
+ota_1,      app,  ota_1,    0x400000,  0x320000,
+spiffs,     data, spiffs,   0x720000,  0x60000,
+mc_spiffs,  data, spiffs,   0x780000,  0x60000,
+coredump,   data, coredump, 0x7E0000,  0x10000,

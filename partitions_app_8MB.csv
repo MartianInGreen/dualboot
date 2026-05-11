@@ -1,0 +1,13 @@
+# mesh-dualboot — APP-VIEW partition table for 8 MB T-Beam Supreme.
+# Identical offsets to partitions_8MB.csv but omits the factory partition
+# so PlatformIO's checkprogsize sees the 3.125 MB ota_0 slot.
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x4000,
+nvs_sel,    data, nvs,      0xd000,    0x3000,
+otadata,    data, ota,      0x10000,   0x2000,
+ota_0,      app,  ota_0,    0x80000,   0x330000,
+ota_1,      app,  ota_1,    0x3B0000,  0x330000,
+spiffs,     data, spiffs,   0x6E0000,  0x80000,
+mc_spiffs,  data, spiffs,   0x760000,  0x80000,
+coredump,   data, coredump, 0x7E0000,  0x10000,

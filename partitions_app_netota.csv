@@ -1,0 +1,17 @@
+# mesh-dualboot — APP-VIEW partition table, NET-OTA variant.
+# Identical offsets to partitions_netota.csv but omits the factory
+# (selector) partition so that PlatformIO's checkprogsize sees the
+# 5.25 MB ota_0 slot as the smallest app partition. Used by both
+# MeshCore and Meshtastic dualboot builds when the device is built
+# alongside a net-OTA-enabled selector. The full layout (with factory)
+# is flashed at 0x8000 by scripts/flash_all.py --net-ota.
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x4000,
+nvs_sel,    data, nvs,      0xd000,    0x3000,
+otadata,    data, ota,      0x10000,   0x2000,
+ota_0,      app,  ota_0,    0x120000,  0x540000,
+ota_1,      app,  ota_1,    0x660000,  0x540000,
+spiffs,     data, spiffs,   0xBA0000,  0x200000,
+mc_spiffs,  data, spiffs,   0xDA0000,  0x200000,
+coredump,   data, coredump, 0xFA0000,  0x10000,

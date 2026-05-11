@@ -1,0 +1,3 @@
+[submodule "selector/lib/ed25519"]
+	path = selector/lib/ed25519
+	url = https://github.com/orlp/ed25519

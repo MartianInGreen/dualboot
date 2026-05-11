@@ -1,0 +1,24 @@
+# mesh-dualboot 16 MB partition table for ESP32-S3 — NET-OTA variant.
+# Identical to partitions.csv except `factory` grows from 0x60000 to
+# 0x100000 to fit the selector + WiFi + lwIP + auth + UI when the
+# MDB_NET_OTA feature is compiled in. Everything after `factory` shifts
+# by 0xA0000. OTA slots stay 5.25 MB so firmware checkprogsize ceilings
+# don't change. ~80 KB tail slack remains.
+#
+# Apps are 64 KB-aligned; data partitions are 4 KB-aligned.
+#
+# Slot assignment (unchanged; firmware-to-slot mapping is in slots.json):
+#   factory  -> selector app (boot menu + net-OTA listener)
+#   ota_0    -> first firmware (per slots.json)
+#   ota_1    -> second firmware (per slots.json)
+#
+# Name,     Type, SubType,  Offset,    Size,      Flags
+nvs,        data, nvs,      0x9000,    0x4000,
+nvs_sel,    data, nvs,      0xd000,    0x3000,
+otadata,    data, ota,      0x10000,   0x2000,
+factory,    app,  factory,  0x20000,   0x100000,
+ota_0,      app,  ota_0,    0x120000,  0x540000,
+ota_1,      app,  ota_1,    0x660000,  0x540000,
+spiffs,     data, spiffs,   0xBA0000,  0x200000,
+mc_spiffs,  data, spiffs,   0xDA0000,  0x200000,
+coredump,   data, coredump, 0xFA0000,  0x10000,

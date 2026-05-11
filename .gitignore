@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# PlatformIO build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+*.elf
+*.factory.bin
+
+# Editor / IDE
+.vscode/
+.idea/
+.claude/
+*.swp
+.DS_Store
+
+# Local-only secrets / overrides
+*.local.ini
+secrets.h

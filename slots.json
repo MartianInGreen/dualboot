@@ -1,0 +1,25 @@
+{
+  "_doc": "Per-board slot assignments. Each board has exactly 2 slots: index 0 → ota_0, index 1 → ota_1. 'name' is the OLED label and the --only key in flash_all.py. 'build' tells flash_all.py how to find the default firmware binary; override at flash time with --slot0 <path> / --slot1 <path>. Edit this file to swap firmwares between slots, rename, or point at custom builds — then rebuild and re-flash the selector for the new labels to appear.",
+
+  "heltec_v4": [
+    {
+      "name": "Official",
+      "build": {"kind": "meshtastic", "env": "heltec-v4-dualboot"}
+    },
+    {
+      "name": "MeshCore",
+      "build": {"kind": "meshcore", "env": "heltec_v4_companion_radio_ble_dualboot"}
+    }
+  ],
+
+  "t_beam_supreme": [
+    {
+      "name": "Official",
+      "build": {"kind": "meshtastic", "env": "tbeam-s3-core-dualboot"}
+    },
+    {
+      "name": "MeshCore",
+      "build": {"kind": "meshcore", "env": "T_Beam_S3_Supreme_SX1262_companion_radio_ble_dualboot"}
+    }
+  ]
+}
