@@ -6,10 +6,11 @@ Quick checks that catch the regressions worth catching:
   asserts alignment, no overlaps, fits in declared flash size, has the
   required slots, and that each `partitions_app*.csv` agrees offset-and-
   size with its full counterpart on every shared partition.
-- **`test_flash_all.py`** confirms the `BOARDS` dict in
-  `scripts/flash_all.py` has offsets and slot sizes matching the CSVs,
-  and that `--dry-run` emits the right `esptool` command for each
-  combination of `--board` and `--only`.
+- **`test_flash_all.py`** confirms the `BOARDS` and `NETOTA_OVERRIDES`
+  dicts in `scripts/flash_all.py` have offsets and slot sizes matching
+  the CSVs (plain and net-OTA), that `slots.json` has two named slots for
+  every board, and that `--dry-run` emits the right `esptool` command for
+  each combination of `--board`, `--net-ota`, and `--only`.
 
 ## Run
 

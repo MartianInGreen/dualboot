@@ -38,7 +38,7 @@ Set these in a new `[env:<board>]` block in `selector/platformio.ini`.
 | `MDB_OLED_ADDR` | yes | I²C address (almost always `0x3C`) |
 | `MDB_PIN_OLED_RESET` | yes | Reset pin, or `-1` if not wired |
 | `MDB_PIN_BUTTON` | yes | User button, active-LOW (uses `INPUT_PULLUP`) |
-| `MDB_PIN_LED` | optional | Status LED. Skip if there isn't one. |
+| `MDB_PIN_LED` | optional | Status LED, driven **active HIGH** (HIGH = lit). There is no polarity macro — an active-LOW LED blinks inverted, which is cosmetic only. Skip if there isn't one. |
 | `MDB_AUTO_BOOT_MS` | yes | Auto-boot countdown in ms (e.g. `5000`) |
 | `MDB_PIN_VEXT_EN` | optional | OLED-rail power-gate pin (Heltec-style) |
 | `MDB_PIN_VEXT_ACTIVE` | with VEXT_EN | `LOW` or `HIGH` — verify against board datasheet, **not** the variant config of an existing firmware (those are sometimes wrong; see `selector/src/main.cpp` comments) |
@@ -110,6 +110,153 @@ Set these in a new `[env:<board>]` block in `selector/platformio.ini`.
    menu, cycle, long-press, observe each firmware boot, confirm the
    cooperative return-to-selector hook works (PRG held at firmware
    startup).
+
+## Worked example: Seeed XIAO ESP32S3 + Wio-SX1262 (8 MB, no display)
+
+This is the minimum-effort port: an 8 MB ESP32-S3 that reuses
+`partitions_8MB.csv` verbatim, and the first target with **no display**,
+which exercises the LED-only fallback path. Total selector-side change:
+one board JSON, two `[env:...]` blocks (plain + net-OTA), one
+`slots.json` entry, one `BOARDS` entry in `flash_all.py` — no source
+changes at all.
+
+### Hardware facts that drive the config
+
+| Fact | Value | Consequence |
+|---|---|---|
+| Flash | 8 MB, QIO, 80 MHz | reuse `partitions_8MB.csv` (3.1875 MB per OTA slot; the net-OTA layout trims to 3.125 MB) |
+| PSRAM | 8 MB octal | board JSON needs `memory_type: qio_opi` |
+| User button | Wio-SX1262 module button, **GPIO21**, active LOW, external 10K pull-up | `MDB_PIN_BUTTON=21`; not the GPIO0 strap pin, so holding it at power-on is safe |
+| Status LED | green LED, **GPIO48**, active HIGH | `MDB_PIN_LED=48` (matches the driver's HIGH = lit convention) |
+| Display | none on the bare kit; XIAO Expansion Board SSD1306 at `0x3C` on **GPIO5 (SDA) / GPIO6 (SCL)** | probe-and-fallback; `MDB_PIN_OLED_RESET=-1` |
+| LoRa | SX1262, SPI1 SCK 7 / MISO 8 / MOSI 9 / CS 41 / RST 42 / BUSY 40 / DIO1 39 / RXEN 38, TX/RX via DIO2 | selector ignores it — no FEM LDO to enable, no `MDB_PIN_LORA_PA_POWER` |
+
+Pin values are taken from the two upstream firmware variants, which are
+the de-facto schematic for this kit: MeshCore `variants/xiao_s3_wio`
+(`PIN_USER_BTN=21`, `PIN_STATUS_LED=48`, `PIN_BOARD_SDA=D4`,
+`PIN_BOARD_SCL=D5`) and Meshtastic `variants/esp32s3/seeed_xiao_s3`
+(`BUTTON_PIN 21`, `LED_POWER 48`, `LED_STATE_ON 1`, `I2C_SDA 5`,
+`I2C_SCL 6`). Re-check both if Seeed revs the kit.
+
+### Selector side
+
+`boards/xiao_s3_wio.json` mirrors PlatformIO's `seeed_xiao_esp32s3`
+manifest (variant `XIAO_ESP32S3`, `memory_type: qio_opi`, HWCDC on boot,
+`flash_size: 8MB`) with `maximum_size` set to the **factory** slot size
+(`0x60000`) so `checkprogsize` gates the selector build against the right
+ceiling.
+
+`selector/platformio.ini` gets one plain env plus its net-OTA sibling:
+
+```ini
+[env:xiao_s3_wio]
+platform = espressif32@6.11.0
+board = xiao_s3_wio
+board_build.partitions = ../partitions_8MB.csv
+build_flags =
+  -D MDB_BOARD_XIAO_S3_WIO=1
+  -D MDB_DISPLAY_KIND=0
+  -D MDB_PIN_SDA=5
+  -D MDB_PIN_SCL=6
+  -D MDB_PIN_OLED_RESET=-1
+  -D MDB_PIN_BUTTON=21
+  -D MDB_PIN_LED=48
+  -D MDB_OLED_ADDR=0x3C
+  -D MDB_AUTO_BOOT_MS=5000
+build_src_filter = +<*> -<net_ota/>
+
+[env:xiao_s3_wio_netota]
+extends = env:xiao_s3_wio
+board_build.partitions = ../partitions_8MB_netota.csv
+build_flags =
+  ${env:xiao_s3_wio.build_flags}
+  -D MDB_NET_OTA=1
+  -D MDB_NET_OTA_AP=1
+  -D MDB_NET_OTA_STA=1
+  -D MDB_NET_OTA_HEADLESS=1
+  -D MDB_NET_OTA_AUTH_HMAC=1
+build_src_filter = +<*> +<net_ota/>
+```
+
+Note there is **no separate "with display" env**. `main.cpp` already
+probes the OLED address and falls back to LED mode on failure, so one
+binary covers both the bare kit and the expansion-board configuration.
+Keeping one env also means the `slots.json` key (`xiao_s3_wio`) and the
+`--board` key stay single-valued.
+
+One gotcha this port exposed: `slots_build.py` keys the pre-script's
+`slots.json` lookup on the PlatformIO env name, so `xiao_s3_wio_netota`
+missed the entry and silently fell back to the compiled-in default labels
+(`MeshCore`/`Meshtastic`) instead of `Official`/`MeshCore`. The pre-script
+now strips a trailing `_netota` before lookup, which fixes the same bug
+for the Heltec and T-Beam net-OTA builds.
+
+### Firmware side
+
+MeshCore — `variants/xiao_s3_wio/platformio.ini`, next to the existing
+`Xiao_S3_WIO_companion_radio_ble` env:
+
+```ini
+[env:Xiao_S3_WIO_companion_radio_ble_dualboot]
+extends = env:Xiao_S3_WIO_companion_radio_ble
+board_build.partitions = ../../dualboot/partitions_app_8MB.csv
+build_flags =
+  ${env:Xiao_S3_WIO_companion_radio_ble.build_flags}
+  -D MDB_DUALBOOT=1
+  -D MDB_BUTTON_PIN=21
+  -D MC_SPIFFS_LABEL=\"mc_spiffs\"
+  -D BLE_NAME_PREFIX=\"MC_\"
+```
+
+Meshtastic — `variants/esp32s3/seeed_xiao_s3/platformio.ini`, next to
+`seeed-xiao-s3`:
+
+```ini
+[env:seeed-xiao-s3-dualboot]
+extends = env:seeed-xiao-s3
+board_build.partitions = ../../dualboot/partitions_app_8MB.csv
+build_flags =
+  ${env:seeed-xiao-s3.build_flags}
+  -D MDB_DUALBOOT=1
+  -D MDB_BUTTON_PIN=21
+```
+
+Both envs also need the two source patches from the T-Beam port (copy
+`MeshDualbootHook.h` in, and `#include` +
+`mdb::check_return_to_selector()` at the top of `setup()`).
+
+### The one non-obvious trap: `MDB_BUTTON_PIN`
+
+`MeshDualbootHook.h` defaults to:
+
+```c
+#ifndef MDB_BUTTON_PIN
+#define MDB_BUTTON_PIN 0
+#endif
+```
+
+GPIO0 is right for the Heltec (PRG) and the T-Beam, and *wrong* for this
+kit — the user button is GPIO21. Forget the define and hold-to-return
+silently watches the BOOT button, which is also the ROM download strap:
+holding that one through a power cycle re-enumerates the chip as a serial
+loader instead of returning to the selector, so it looks like a brick to
+anyone who does not know the strap exists.
+
+Related: because the selector's button (21) is *not* a strap pin, the
+XIAO does not need the "don't hold it at power-on" caveat that the Heltec
+has. Hold-through-boot works.
+
+### LED-only mode semantics
+
+With no OLED the selector sets `auto_boot_cancelled = true` (see
+`setup()`), so it waits for an explicit long-press instead of counting
+down into a firmware. The LED task blinks the *current* selection — 1
+blink for slot 0, 2 for slot 1 — on a ~2 s cycle, and taps immediately
+update the blink count. `MDB_AUTO_BOOT_MS` is consequently inert on a
+headless board; it only matters once a panel is attached.
+
+Keep the `MDB_AUTO_BOOT_MS` define anyway: the same binary is what runs
+when an expansion board is fitted, and the auto-boot path needs it.
 
 ## A note on A/B OTA (it's incompatible with dual-boot)
 
@@ -237,9 +384,11 @@ the selector keeps boot ownership; the user re-picks via menu after
 the write. None of the failure modes that make in-firmware OTA unsafe
 on dualboot apply here.
 
-### 8 MB layout (T-Beam Supreme)
+### 8 MB layout (T-Beam Supreme, XIAO ESP32S3 + Wio-SX1262)
 
-Supported via `partitions_8MB_netota.csv` and `partitions_app_8MB_netota.csv`.
+Supported via `partitions_8MB_netota.csv` and `partitions_app_8MB_netota.csv`,
+shared by both 8 MB targets (`xiao_s3_wio_netota` simply extends
+`xiao_s3_wio` with the net-OTA flags).
 Tighter than the 16 MB version; trade-offs are baked into the CSV:
 - factory:    384 KB → 768 KB  (+384 KB)
 - ota_X:    3.1875 MB → 3.125 MB (-64 KB each)
@@ -248,7 +397,9 @@ Tighter than the 16 MB version; trade-offs are baked into the CSV:
 Watch for: if Meshtastic ever grows past 3.125 MB, ota slots need to
 move. Re-test after each Meshtastic release. The selector itself is at
 ~95% of the 768 KB factory in HMAC-only mode; enabling Ed25519 brings
-it to ~99% — workable, but no headroom for further growth.
+it to ~99% — workable, but no headroom for further growth. The XIAO
+build links without XPowersLib (no PMU on this board), so it lands a few
+KB smaller than the T-Beam's — do not treat that as headroom.
 
 Firmware-side envs targeting an 8 MB net-OTA device must use
 `partitions_app_8MB_netota.csv` so checkprogsize gates against the

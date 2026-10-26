@@ -1,5 +1,6 @@
 # mesh-dualboot 8 MB partition table for ESP32-S3 — NET-OTA variant.
-# T-Beam Supreme (8 MB flash) layout for selectors built with MDB_NET_OTA.
+# Shared by every 8 MB target (T-Beam Supreme, XIAO ESP32S3 + Wio-SX1262)
+# for selectors built with MDB_NET_OTA.
 # The 8 MB chip has only 64 KB tail slack today; growing factory means
 # trimming elsewhere. The trade-offs:
 #   factory     384 KB  -> 768 KB   (+384, fits ~720 KB netota selector)

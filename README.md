@@ -1,11 +1,15 @@
 # mesh-dualboot
 
 Run **MeshCore** or **Meshtastic** on the same ESP32-S3 device, picked at boot
-from an OLED menu — no reflashing.
+from a menu — no reflashing.
 
-Supported targets (both hardware-verified):
-- **Heltec WiFi LoRa 32 v4** (16 MB flash, SSD1315 OLED).
-- **LilyGo T-Beam Supreme** (8 MB flash).
+Supported targets:
+- **Heltec WiFi LoRa 32 v4** (16 MB flash, SSD1315 OLED) — hardware-verified.
+- **LilyGo T-Beam Supreme** (8 MB flash) — hardware-verified.
+- **Seeed XIAO ESP32S3 + Wio-SX1262 kit** (8 MB flash, no built-in display) —
+  builds and partition-verified; LED-blink menu out of the box, full OLED
+  menu if a XIAO Expansion Board is clipped on (see
+  [XIAO notes](#seeed-xiao-esp32s3--wio-sx1262-notes)).
 
 **Project home:** [officialmesh.org](https://officialmesh.org) · [github.com/official-mesh](https://github.com/official-mesh)  
 **Maintainer:** The Official Mesh Admin  
@@ -47,6 +51,12 @@ Both routes are implemented in `MeshDualbootHook.h` (a tiny header included
 into each firmware's `setup()`), backed by RTC slow memory so the
 double-reset counter survives a reset but not a power-off.
 
+On boards without a display (the bare XIAO kit) the selector falls back to
+an **LED-blink menu**: it blinks the current selection (1 = slot 0,
+2 = slot 1), a tap cycles, and a hold ≥0.5 s boots. No auto-boot countdown,
+so a headless node never picks a firmware without someone pressing the
+button.
+
 ## Layout
 
 `partitions.csv` (16 MB — Heltec V4):
@@ -63,7 +73,7 @@ double-reset counter survives a reset but not a power-off.
 | 0xd00000  | 2 MB     | mc_spiffs | MeshCore SPIFFS                  |
 | 0xf00000  | 64 KB    | coredump  | crash dumps                      |
 
-`partitions_8MB.csv` (8 MB — T-Beam Supreme):
+`partitions_8MB.csv` (8 MB — T-Beam Supreme, XIAO ESP32S3 + Wio-SX1262):
 
 | Offset    | Size      | Name      | Purpose                          |
 |-----------|-----------|-----------|----------------------------------|
@@ -85,22 +95,26 @@ other's persistent state.
 Three projects, three builds. Substitute your board:
 
 - Heltec V4: selector env `heltec_v4`, MeshCore env `heltec_v4_companion_radio_ble_dualboot`, Meshtastic env `heltec-v4-dualboot`.
-- T-Beam Supreme (8 MB): selector env `t_beams3_supreme`, MeshCore env `T_Beam_S3_Supreme_SX1262_companion_radio_ble_dualboot`, Meshtastic env `tbeam-s3-core-dualboot`.
+- T-Beam Supreme (8 MB): selector env `t_beam_supreme`, MeshCore env `T_Beam_S3_Supreme_SX1262_companion_radio_ble_dualboot`, Meshtastic env `tbeam-s3-core-dualboot`.
+- XIAO ESP32S3 + Wio-SX1262 (8 MB): selector env `xiao_s3_wio`, MeshCore env `Xiao_S3_WIO_companion_radio_ble_dualboot`, Meshtastic env `seeed-xiao-s3-dualboot`.
 
 ```bash
 # 1. Selector
 cd ~/src/official-mesh/dualboot/selector
-pio run -e heltec_v4              # or: pio run -e t_beams3_supreme
+pio run -e heltec_v4              # or: pio run -e t_beam_supreme
+                                  # or: pio run -e xiao_s3_wio
 
 # 2. MeshCore
 cd ~/src/MeshCore
 pio run -e heltec_v4_companion_radio_ble_dualboot
 # T-Beam: pio run -e T_Beam_S3_Supreme_SX1262_companion_radio_ble_dualboot
+# XIAO:   pio run -e Xiao_S3_WIO_companion_radio_ble_dualboot
 
 # 3. Official Mesh firmware
 cd ~/src/official-mesh/firmware
 pio run -e heltec-v4-dualboot
 # T-Beam: pio run -e tbeam-s3-core-dualboot
+# XIAO:   pio run -e seeed-xiao-s3-dualboot
 ```
 
 Then full-chip flash. `--board` is required — pick the matching board
@@ -109,15 +123,21 @@ key from `slots.json`:
 ```bash
 python3 ~/src/official-mesh/dualboot/scripts/flash_all.py \
     --board heltec_v4 --port /dev/cu.usbmodem*
-# T-Beam: --board t_beams3_supreme
+# T-Beam: --board t_beam_supreme
+# XIAO:   --board xiao_s3_wio
 ```
+
+> The XIAO's native USB port only shows up as a serial device while an app
+> is running. If the device is in the ROM loader (or freshly erased), hold
+> **BOOT** and tap **RESET** to land in download mode first; esptool then
+> talks to the USB-Serial-JTAG interface on the same connector.
 
 `flash_all.py --help` shows partial-update flags:
 
 * `--only 0` / `--only 1` / `--only selector` — refresh one slot (you can also pass the slot's configured name, e.g. `--only meshtastic`)
 * `--reset-selection` — erase otadata so the menu shows on next boot
 * `--slot0 <path>` / `--slot1 <path>` — point at custom firmware bins (overrides the defaults derived from `slots.json`)
-* `--net-ota` — use the net-OTA partition layout (16 MB only; see below)
+* `--net-ota` — use the net-OTA partition layout (see below)
 
 ### Net-OTA: refresh a slot from your phone, no laptop
 
@@ -126,7 +146,7 @@ authenticated firmware push over WiFi+TCP and writes it to a chosen
 `ota_X` partition. **Same operation as `--only`, just over the network.**
 Otadata is untouched; the selector keeps boot ownership.
 
-Two boards supported:
+Three boards supported:
 * **16 MB Heltec V4** (`heltec_v4_netota`): factory grows to 1 MB; OTA
   slots and filesystems unchanged. Comfortable headroom (~32%).
 * **8 MB T-Beam Supreme** (`t_beam_supreme_netota`): factory grows to
@@ -135,6 +155,11 @@ Two boards supported:
   (still 384 KB each — plenty for typical config + node DB). Tight
   on factory (~95% used in HMAC-only build); enabling Ed25519 leaves
   only ~12 KB headroom.
+* **8 MB XIAO ESP32S3 + Wio-SX1262** (`xiao_s3_wio_netota`): shares the
+  T-Beam's 8 MB net-OTA layout, so the same ~95% factory estimate
+  applies — the XIAO build is slightly smaller (no PMU code), but don't
+  bank on more than a few tens of KB. Headless-first: the AP path needs
+  the expansion-board OLED to show the PSK, so use the STA/headless flow.
 
 Build and flash:
 
@@ -146,6 +171,10 @@ pio run -e heltec-v4-dualboot                                # firmware (uses pa
 cd ~/src/MeshCore
 pio run -e heltec_v4_companion_radio_ble_dualboot            # firmware (uses partitions_app_netota.csv)
 flash_all.py --net-ota --board heltec_v4 --port /dev/cu.usbmodem*
+
+# 8 MB boards: swap in t_beam_supreme_netota / xiao_s3_wio_netota and build
+# the firmware envs against partitions_app_8MB_netota.csv, then:
+#   flash_all.py --net-ota --board xiao_s3_wio --port ...
 ```
 
 > **Existing dualboot devices need a one-time full reflash to migrate** —
@@ -301,12 +330,63 @@ advertising name distinguishes the firmware on the same hardware MAC.
 * `src/main.cpp` — `#include` + `mdb::check_return_to_selector()` at top of `setup()`
 * All patches `#ifdef MDB_DUALBOOT`-guarded.
 
+**XIAO ESP32S3 + Wio-SX1262** — same two patches, three board-specific
+defines (full env snippets in [PORTING.md](PORTING.md#worked-example-seeed-xiao-esp32s3--wio-sx1262-8-mb-no-display)):
+
+* MeshCore (`variants/xiao_s3_wio/platformio.ini`) adds env
+  `Xiao_S3_WIO_companion_radio_ble_dualboot`, extending
+  `env:Xiao_S3_WIO_companion_radio_ble` with `-D MDB_DUALBOOT=1`,
+  `-D MDB_BUTTON_PIN=21`, `-D MC_SPIFFS_LABEL="mc_spiffs"`,
+  `-D BLE_NAME_PREFIX="MC_"`, and `partitions_app_8MB.csv`.
+* Meshtastic (`variants/esp32s3/seeed_xiao_s3/platformio.ini`) adds env
+  `seeed-xiao-s3-dualboot`, extending `env:seeed-xiao-s3` with
+  `-D MDB_DUALBOOT=1`, `-D MDB_BUTTON_PIN=21`, and
+  `partitions_app_8MB.csv`.
+
+`MDB_BUTTON_PIN=21` is load-bearing, not cosmetic: the hook defaults to
+GPIO0, and on the XIAO the user button is GPIO21 (GPIO0 is the BOOT strap
+pin). Without the override, hold-to-return watches the wrong button.
+
+### Seeed XIAO ESP32S3 + Wio-SX1262 notes
+
+The bare kit is the first supported target without a display, so the
+selector runs in its LED-blink mode unless you add a panel:
+
+* **Display is auto-detected.** The selector probes `0x3C` on D4/D5
+  (SDA=GPIO5, SCL=GPIO6) — the pins the XIAO Expansion Board's 128×64
+  SSD1306 sits on. Nothing answers → LED mode. Clip the expansion board
+  on and the full OLED menu appears, same binary, no rebuild.
+* **LED-blink menu** (green LED on GPIO48, active HIGH): 1 blink = slot 0
+  (`Official`), 2 blinks = slot 1 (`MeshCore`), repeating roughly every
+  2 s. Tap to cycle, hold ≥0.5 s to boot into the blinking slot. The
+  auto-boot countdown is disabled in this mode, so an unattended node
+  never picks a firmware by itself.
+* **Button is GPIO21, not the BOOT strap.** The Wio-SX1262 module's user
+  button sits on GPIO21 with its own 10K pull-up, so holding it through a
+  power-cycle is safe — the chip still runs the selector instead of
+  dropping into the ROM serial loader (which is exactly what GPIO0 would
+  do).
+* **Return-to-selector:** hold the user button (GPIO21) for ~2 s during
+  the firmware's startup window, or double-tap the XIAO's RESET button
+  within ~3 s. Both need the firmware-side hook described above.
+* **The selector never touches the radio.** The SX1262 hangs off SPI1
+  (SCK 7 / MISO 8 / MOSI 9 / CS 41 / RST 42 / BUSY 40 / DIO1 39 /
+  RXEN 38, TX/RX switch driven by DIO2). Leaving it idle for the ~1 s the
+  selector runs is fine — no FEM LDO to keep powered, unlike the Heltec.
+* **8 MB flash**, so it uses the same `partitions_8MB.csv` layout as the
+  T-Beam Supreme (3.1875 MB per OTA slot).
+* **Never use in-firmware OTA** here either; the generic warning above
+  applies unchanged. With no display the selector-mediated net-OTA path
+  is the practical field-update route — build `xiao_s3_wio_netota` and
+  drive it from the firmware's headless/STA trigger.
+
 ## Adding more boards
 
 See [PORTING.md](PORTING.md) for the minimum requirements, the full
 list of `MDB_*` configuration macros, and a step-by-step recipe for
 adding a new board (or a new firmware pair). T-Beam Supreme support
-in this repo is itself a worked example of the procedure.
+in this repo is itself a worked example of the procedure; the XIAO port
+is the worked example for a headless (no-display) board.
 
 ## Verifying releases
 
@@ -357,3 +437,12 @@ return-to-selector all work on both boards. The double-tap-RST return
 path is currently broken on the Heltec V4 test unit (pre-existing, not
 caused by recent changes); use PRG-long-press during the firmware's
 startup window instead.
+
+**XIAO ESP32S3 + Wio-SX1262: not yet hardware-verified.** The selector
+builds for `xiao_s3_wio` / `xiao_s3_wio_netota`, the partition layout is
+the T-Beam-verified 8 MB table, and the pin map is taken from the
+upstream MeshCore `xiao_s3_wio` and Meshtastic `seeed_xiao_s3` variants
+(button GPIO21, LED GPIO48, I²C 5/6). What still needs a real device:
+LED-blink gestures, the PRG-equivalent return to selector, and the
+`seeed-xiao-s3-dualboot` firmware env. Treat first flash as bring-up and
+keep a USB cable handy.

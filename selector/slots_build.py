@@ -28,19 +28,29 @@ def _load():
 def _apply():
     cfg = _load()
     pioenv = env["PIOENV"]  # type: ignore[name-defined]  # noqa: F821
-    slots = cfg.get(pioenv)
+    # Net-OTA envs are the same board with extra feature flags
+    # (`<board>_netota`), so resolve them to the base board's slot config.
+    # Without this a net-OTA selector silently builds with the compiled-in
+    # default labels instead of the ones in slots.json.
+    key = pioenv
+    if key not in cfg:
+        base = pioenv[: -len("_netota")] if pioenv.endswith("_netota") else None
+        if base and base in cfg:
+            key = base
+    slots = cfg.get(key)
     if not slots:
         print(f"[slots_build] no entry for env {pioenv!r} in slots.json — using defaults")
         return
     if len(slots) != 2:
-        raise SystemExit(f"slots.json[{pioenv!r}]: expected exactly 2 slots, got {len(slots)}")
+        raise SystemExit(f"slots.json[{key!r}]: expected exactly 2 slots, got {len(slots)}")
     s0 = slots[0]["name"]
     s1 = slots[1]["name"]
     env.Append(BUILD_FLAGS=[  # type: ignore[name-defined]  # noqa: F821
         f"-D MDB_SLOT0_NAME={_c_string(s0)}",
         f"-D MDB_SLOT1_NAME={_c_string(s1)}",
     ])
-    print(f"[slots_build] {pioenv}: slot0={s0!r} slot1={s1!r}")
+    print(f"[slots_build] {pioenv} (slots.json key {key!r}): "
+          f"slot0={s0!r} slot1={s1!r}")
 
 
 _apply()

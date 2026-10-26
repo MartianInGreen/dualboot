@@ -1,6 +1,7 @@
-# mesh-dualboot — APP-VIEW partition table for 8 MB T-Beam Supreme.
+# mesh-dualboot — APP-VIEW partition table for 8 MB ESP32-S3 boards
+# (T-Beam Supreme, XIAO ESP32S3 + Wio-SX1262).
 # Identical offsets to partitions_8MB.csv but omits the factory partition
-# so PlatformIO's checkprogsize sees the 3.125 MB ota_0 slot.
+# so PlatformIO's checkprogsize sees the 3.1875 MB ota_0 slot.
 #
 # Name,     Type, SubType,  Offset,    Size,      Flags
 nvs,        data, nvs,      0x9000,    0x4000,

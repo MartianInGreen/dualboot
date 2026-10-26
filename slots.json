@@ -21,5 +21,16 @@
       "name": "MeshCore",
       "build": {"kind": "meshcore", "env": "T_Beam_S3_Supreme_SX1262_companion_radio_ble_dualboot"}
     }
+  ],
+
+  "xiao_s3_wio": [
+    {
+      "name": "Official",
+      "build": {"kind": "meshtastic", "env": "seeed-xiao-s3-dualboot"}
+    },
+    {
+      "name": "MeshCore",
+      "build": {"kind": "meshcore", "env": "Xiao_S3_WIO_companion_radio_ble_dualboot"}
+    }
   ]
 }

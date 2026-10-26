@@ -7,6 +7,7 @@
 # Boards supported:
 #   heltec_v4       — Heltec WiFi LoRa 32 v4, 16 MB
 #   t_beam_supreme  — LilyGo T-Beam Supreme, 8 MB
+#   xiao_s3_wio     — Seeed XIAO ESP32S3 + Wio-SX1262 kit, 8 MB
 #
 # Slot assignments (names + default firmware bin paths) come from
 # ../slots.json. Override per-flash with --slot0 <path> / --slot1 <path>.
@@ -98,6 +99,24 @@ BOARDS = {
             "ota_1":   0x330000,
         },
     },
+    # Same 8 MB layout as the T-Beam Supreme (partitions_8MB.csv).
+    "xiao_s3_wio": {
+        "flash_size": "8MB",
+        "selector_env": "xiao_s3_wio",
+        "offsets": {
+            "bootloader": 0x000000,
+            "partitions": 0x008000,
+            "otadata":    0x010000,
+            "factory":    0x020000,
+            "ota_0":      0x080000,
+            "ota_1":      0x3B0000,
+        },
+        "slot_size": {
+            "factory": 0x60000,
+            "ota_0":   0x330000,
+            "ota_1":   0x330000,
+        },
+    },
 }
 
 # Net-OTA layout overlays. When --net-ota is passed, these override the
@@ -122,6 +141,22 @@ NETOTA_OVERRIDES = {
     },
     "t_beam_supreme": {
         "selector_env": "t_beam_supreme_netota",
+        "offsets": {
+            "bootloader": 0x000000,
+            "partitions": 0x008000,
+            "otadata":    0x010000,
+            "factory":    0x020000,
+            "ota_0":      0x0E0000,
+            "ota_1":      0x400000,
+        },
+        "slot_size": {
+            "factory": 0xC0000,
+            "ota_0":   0x320000,
+            "ota_1":   0x320000,
+        },
+    },
+    "xiao_s3_wio": {
+        "selector_env": "xiao_s3_wio_netota",
         "offsets": {
             "bootloader": 0x000000,
             "partitions": 0x008000,
@@ -243,9 +278,10 @@ def main():
     ap.add_argument("--only",
                     help="flash only one slot: 0, 1, selector, or a configured slot name")
     ap.add_argument("--net-ota", dest="net_ota", action="store_true",
-                    help="use the net-OTA partition layout (factory grown to 1 MB; "
-                         "selector built with WiFi+TCP listener). Only supported on "
-                         "boards in NETOTA_OVERRIDES.")
+                    help="use the net-OTA partition layout (factory grown to 1 MB on "
+                         "16 MB boards / 768 KB on 8 MB boards; selector built with "
+                         "the WiFi+TCP listener). Only supported on boards in "
+                         "NETOTA_OVERRIDES.")
     ap.add_argument("--reset-selection", action="store_true",
                     help="erase otadata so the selector menu shows on next boot")
     ap.add_argument("--bootloader")
@@ -262,9 +298,8 @@ def main():
     cfg = BOARDS[args.board]
     if args.net_ota:
         if args.board not in NETOTA_OVERRIDES:
-            sys.exit(f"--net-ota: board {args.board!r} does not support net-OTA "
-                     f"(8 MB boards would have to shrink OTA slots; "
-                     f"see partitions_netota.csv for the supported 16 MB layout)")
+            sys.exit(f"--net-ota: board {args.board!r} has no net-OTA partition "
+                     f"layout (see NETOTA_OVERRIDES / partitions_*_netota.csv)")
         cfg = {**cfg, **NETOTA_OVERRIDES[args.board]}
     slots = load_slots(args.board)
     slot_names = [s["name"] for s in slots]

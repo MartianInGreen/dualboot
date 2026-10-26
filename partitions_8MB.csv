@@ -1,4 +1,6 @@
-# mesh-dualboot 8 MB partition table for ESP32-S3 (T-Beam Supreme).
+# mesh-dualboot 8 MB partition table for ESP32-S3.
+# Shared by every 8 MB target: LilyGo T-Beam Supreme and Seeed XIAO ESP32S3
+# + Wio-SX1262 kit.
 # Layout designed from ESP-IDF Partition Tables documentation.
 #
 # Slot assignment:
